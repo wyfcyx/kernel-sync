@@ -1,0 +1,128 @@
+use core::{
+    cell::UnsafeCell,
+    fmt,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+    sync::atomic::{AtomicBool, Ordering},
+};
+
+pub struct SpinLock<T: ?Sized> {
+    // phantom: PhantomData<R>,
+    pub(crate) locked: AtomicBool,
+    cpuid: u8,
+    data: UnsafeCell<T>,
+}
+
+/// An RAII implementation of a “scoped lock” of a mutex.
+/// When this structure is dropped (falls out of scope),
+/// the lock will be unlocked.
+///
+pub struct SpinLockGuard<'a, T: ?Sized + 'a> {
+    lock: &'a AtomicBool,
+    data: &'a mut T,
+}
+
+unsafe impl<T: ?Sized + Send> Sync for SpinLock<T> {}
+unsafe impl<T: ?Sized + Send> Send for SpinLock<T> {}
+
+impl<T> SpinLock<T> {
+    #[inline(always)]
+    pub const fn new(data: T) -> Self {
+        SpinLock {
+            locked: AtomicBool::new(false),
+            data: UnsafeCell::new(data),
+            cpuid: 0,
+        }
+    }
+
+    #[inline(always)]
+    pub fn into_inner(self) -> T {
+        // We know statically that there are no outstanding references to
+        // `self` so there's no need to lock.
+        let SpinLock { data, .. } = self;
+        data.into_inner()
+    }
+
+    #[inline(always)]
+    pub fn as_mut_ptr(&self) -> *mut T {
+        self.data.get()
+    }
+}
+
+impl<T: ?Sized> SpinLock<T> {
+    #[inline(always)]
+    pub fn lock(&self) -> SpinLockGuard<T> {
+        unsafe {
+            crate::enable_intr();
+        }
+        while self
+            .locked
+            .compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            // Wait until the lock looks unlocked before retrying
+            while self.is_locked() {
+                // R::relax();
+            }
+        }
+
+        SpinLockGuard {
+            lock: &self.locked,
+            data: unsafe { &mut *self.data.get() },
+        }
+    }
+
+    #[inline(always)]
+    pub fn is_locked(&self) -> bool {
+        self.locked.load(Ordering::Relaxed)
+    }
+
+    #[inline(always)]
+    pub fn try_lock(&self) -> Option<SpinLockGuard<T>> {
+        if self
+            .locked
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+        {
+            Some(SpinLockGuard {
+                lock: &self.locked,
+                data: unsafe { &mut *self.data.get() },
+            })
+        } else {
+            None
+        }
+    }
+
+    #[inline(always)]
+    pub fn get_mut(&mut self) -> &mut T {
+        // We know statically that there are no other references to `self`, so
+        // there's no need to lock the inner mutex.
+        unsafe { &mut *self.data.get() }
+    }
+}
+
+impl<'a, T: ?Sized + fmt::Display> fmt::Display for SpinLockGuard<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&**self, f)
+    }
+}
+
+impl<'a, T: ?Sized> Deref for SpinLockGuard<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        self.data
+    }
+}
+
+impl<'a, T: ?Sized> DerefMut for SpinLockGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.data
+    }
+}
+
+impl<'a, T: ?Sized> Drop for SpinLockGuard<'a, T> {
+    /// The dropping of the MutexGuard will release the lock it was created from.
+    fn drop(&mut self) {
+        self.lock.store(false, Ordering::Release);
+    }
+}
