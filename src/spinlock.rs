@@ -124,5 +124,33 @@ impl<'a, T: ?Sized> Drop for SpinLockGuard<'a, T> {
     /// The dropping of the MutexGuard will release the lock it was created from.
     fn drop(&mut self) {
         self.lock.store(false, Ordering::Release);
+        unsafe {
+            crate::disable_intr();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    #[test]
+    fn basic_test() {
+        let x = Arc::new(super::SpinLock::new(0));
+        let thread_cnt = 3;
+        let loop_cnt = 1000000;
+        let mut threads = vec![];
+        for _ in 0..thread_cnt {
+            let x_clone = x.clone();
+            threads.push(std::thread::spawn(move || {
+                for _ in 0..loop_cnt {
+                    let mut guard = x_clone.lock();
+                    *guard += 1;
+                }
+            }));
+        }
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        assert_eq!(*(x.lock()), thread_cnt * loop_cnt);
     }
 }

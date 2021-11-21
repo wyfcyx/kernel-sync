@@ -1,6 +1,13 @@
-mod spinlock;
+// #![no_std]
+use log;
 
-extern "C" {
-    pub(crate) fn enable_intr();
-    pub(crate) fn disable_intr();
+// extern "C" {
+pub fn enable_intr() {
+    log::info!("enable intr");
 }
+pub fn disable_intr() {
+    log::info!("disenable intr");
+}
+// }
+
+mod spinlock;
