@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 log = "0.4"
+tokio = { version = "0.2", features = ["full"] }

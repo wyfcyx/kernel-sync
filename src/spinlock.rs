@@ -153,4 +153,18 @@ mod tests {
         }
         assert_eq!(*(x.lock()), thread_cnt * loop_cnt);
     }
+    #[test]
+    fn try_lock_test() {
+        let x = Arc::new(super::SpinLock::new(0));
+        let lock_result0 = x.try_lock();
+        assert!(lock_result0.is_some());
+
+        let lock_result1 = x.try_lock();
+        assert!(lock_result1.is_none());
+
+        drop(lock_result0);
+
+        let lock_result2= x.try_lock();
+        assert!(lock_result2.is_some());
+    }
 }
