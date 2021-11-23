@@ -1,10 +1,11 @@
 use core::{
     cell::UnsafeCell,
     fmt,
-    marker::PhantomData,
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, Ordering},
 };
+
+use crate::interrupt::{cpuid, pop_off, push_off};
 
 pub struct SpinLock<T: ?Sized> {
     // phantom: PhantomData<R>,
@@ -18,7 +19,7 @@ pub struct SpinLock<T: ?Sized> {
 /// the lock will be unlocked.
 ///
 pub struct SpinLockGuard<'a, T: ?Sized + 'a> {
-    lock: &'a AtomicBool,
+    spinlock: &'a SpinLock<T>,
     data: &'a mut T,
 }
 
@@ -52,9 +53,11 @@ impl<T> SpinLock<T> {
 impl<T: ?Sized> SpinLock<T> {
     #[inline(always)]
     pub fn lock(&self) -> SpinLockGuard<T> {
-        unsafe {
-            crate::enable_intr();
+        push_off();
+        if self.holding() {
+            panic!("a spinlock can only be locked once by a CPU");
         }
+
         while self
             .locked
             .compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed)
@@ -67,28 +70,28 @@ impl<T: ?Sized> SpinLock<T> {
         }
 
         SpinLockGuard {
-            lock: &self.locked,
+            spinlock: self,
             data: unsafe { &mut *self.data.get() },
         }
     }
 
     #[inline(always)]
-    pub fn is_locked(&self) -> bool {
-        self.locked.load(Ordering::Relaxed)
-    }
-
-    #[inline(always)]
     pub fn try_lock(&self) -> Option<SpinLockGuard<T>> {
+        push_off();
+        if self.holding() {
+            panic!("a spinlock can only be locked once by a CPU");
+        }
         if self
             .locked
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok()
         {
             Some(SpinLockGuard {
-                lock: &self.locked,
+                spinlock: self,
                 data: unsafe { &mut *self.data.get() },
             })
         } else {
+            pop_off();
             None
         }
     }
@@ -98,6 +101,18 @@ impl<T: ?Sized> SpinLock<T> {
         // We know statically that there are no other references to `self`, so
         // there's no need to lock the inner mutex.
         unsafe { &mut *self.data.get() }
+    }
+
+    #[inline(always)]
+    pub fn is_locked(&self) -> bool {
+        self.locked.load(Ordering::Relaxed)
+    }
+
+    /// Check whether this cpu is holding the lock.
+    /// Interrupts must be off.
+    #[inline(always)]
+    pub fn holding(&self) -> bool {
+        return self.is_locked() && self.cpuid == cpuid();
     }
 }
 
@@ -123,48 +138,20 @@ impl<'a, T: ?Sized> DerefMut for SpinLockGuard<'a, T> {
 impl<'a, T: ?Sized> Drop for SpinLockGuard<'a, T> {
     /// The dropping of the MutexGuard will release the lock it was created from.
     fn drop(&mut self) {
-        self.lock.store(false, Ordering::Release);
-        unsafe {
-            crate::disable_intr();
+        if !self.spinlock.holding() {
+            panic!("current cpu doesn't hold the lock{}", self.spinlock);
         }
+        self.spinlock.locked.store(false, Ordering::Release);
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-    #[test]
-    fn basic_test() {
-        let x = Arc::new(super::SpinLock::new(0));
-        let thread_cnt = 3;
-        let loop_cnt = 1000000;
-        let mut threads = vec![];
-        for _ in 0..thread_cnt {
-            let x_clone = x.clone();
-            threads.push(std::thread::spawn(move || {
-                for _ in 0..loop_cnt {
-                    let mut guard = x_clone.lock();
-                    *guard += 1;
-                }
-            }));
-        }
-        for thread in threads {
-            thread.join().unwrap();
-        }
-        assert_eq!(*(x.lock()), thread_cnt * loop_cnt);
-    }
-    #[test]
-    fn try_lock_test() {
-        let x = Arc::new(super::SpinLock::new(0));
-        let lock_result0 = x.try_lock();
-        assert!(lock_result0.is_some());
-
-        let lock_result1 = x.try_lock();
-        assert!(lock_result1.is_none());
-
-        drop(lock_result0);
-
-        let lock_result2= x.try_lock();
-        assert!(lock_result2.is_some());
+impl<T: ?Sized> fmt::Display for SpinLock<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Spinlock{{locked={}, cpuid={}}}",
+            self.locked.load(Ordering::Relaxed),
+            self.cpuid,
+        )
     }
 }

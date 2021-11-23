@@ -1,6 +1,6 @@
 extern crate alloc;
 use alloc::collections::linked_list::LinkedList;
-use core::cell::{RefCell, UnsafeCell};
+use core::cell::UnsafeCell;
 use core::future::Future;
 use core::ops::{Deref, DerefMut};
 use core::pin::Pin;
@@ -54,7 +54,6 @@ unsafe impl<T: ?Sized + Send> Send for MutexLockFuture<'_, T> {}
 
 impl<T> Mutex<T> {
     /// Creates a new mutex in an unlocked state ready for use.
-    ///
     pub fn new(t: T) -> Self {
         Mutex {
             state: AtomicBool::new(false),
@@ -127,35 +126,5 @@ impl<T: ?Sized> Drop for MutexGuard<'_, T> {
     #[inline]
     fn drop(&mut self) {
         self.mutex.unlock();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    extern crate alloc;
-    use alloc::sync::Arc;
-    use tokio;
-
-    async fn handle(x: Arc<super::Mutex<i32>>, loop_cnt: i32) {
-        for _ in 0..loop_cnt {
-            let mut guard = x.lock().await;
-            *guard += 1;
-        }
-    }
-
-    #[tokio::test]
-    async fn mutex_test() {
-        let x = Arc::new(super::Mutex::new(0));
-        let coroutine_cnt = 10;
-        let loop_cnt = 500;
-        let mut coroutines = vec![];
-        for _ in 0..coroutine_cnt {
-            let x_cloned = x.clone();
-            coroutines.push(tokio::spawn(handle(x_cloned, loop_cnt)));
-        }
-        for coroutine in coroutines {
-            tokio::join!(coroutine).0.unwrap();
-        }
-        assert_eq!(*x.lock().await, coroutine_cnt * loop_cnt);
     }
 }

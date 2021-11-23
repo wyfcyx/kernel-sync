@@ -1,17 +1,9 @@
-// #![no_std]
+#![no_std]
 #![feature(async_closure)]
-use log;
+#![feature(asm)]
 
-// extern "C" {
-pub fn enable_intr() {
-    log::info!("enable intr");
-}
-pub fn disable_intr() {
-    log::info!("disenable intr");
-}
+extern crate alloc;
 
-
-// }
-
-mod spinlock;
-mod mutex;
+pub mod interrupt;
+pub mod mutex;
+pub mod spinlock;
