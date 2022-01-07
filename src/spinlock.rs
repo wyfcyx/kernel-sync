@@ -5,7 +5,7 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use crate::interrupt::{cpuid, pop_off, push_off};
+use crate::interrupt::{cpu_id, pop_off, push_off};
 
 pub struct SpinLock<T: ?Sized> {
     // phantom: PhantomData<R>,
@@ -112,7 +112,7 @@ impl<T: ?Sized> SpinLock<T> {
     /// Interrupts must be off.
     #[inline(always)]
     pub fn holding(&self) -> bool {
-        return self.is_locked() && self.cpuid == cpuid();
+        return self.is_locked() && self.cpuid == cpu_id();
     }
 }
 
