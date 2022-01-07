@@ -1,5 +1,5 @@
 #![no_std]
-#![feature(async_closure)]
+// #![feature(async_closure)]
 #![feature(asm)]
 
 extern crate alloc;
