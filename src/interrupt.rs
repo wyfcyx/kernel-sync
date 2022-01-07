@@ -11,7 +11,18 @@ pub struct Cpu {
 }
 
 lazy_static! {
-    pub static ref CPUS: [Arc<Cpu>; 2] = [Arc::new(Cpu::default()), Arc::new(Cpu::default())];
+    pub static ref CPUS: [Arc<Cpu>; 10] = [
+        Arc::new(Cpu::default()),
+        Arc::new(Cpu::default()),
+        Arc::new(Cpu::default()),
+        Arc::new(Cpu::default()),
+        Arc::new(Cpu::default()),
+        Arc::new(Cpu::default()),
+        Arc::new(Cpu::default()),
+        Arc::new(Cpu::default()),
+        Arc::new(Cpu::default()),
+        Arc::new(Cpu::default())
+    ]; // TODO: remove hard code logic.
 }
 
 /// return id of current cpu, it requires kernel maintaining cpuid in tp
