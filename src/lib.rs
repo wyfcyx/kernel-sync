@@ -1,6 +1,7 @@
 #![no_std]
 #![feature(async_closure)]
 #![feature(asm)]
+#![feature(get_mut_unchecked)]
 
 extern crate alloc;
 

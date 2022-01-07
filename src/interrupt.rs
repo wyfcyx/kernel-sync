@@ -14,8 +14,18 @@ lazy_static! {
     pub static ref CPUS: [Arc<Cpu>; 2] = [Arc::new(Cpu::default()), Arc::new(Cpu::default())];
 }
 
+/// return id of current cpu, it requires kernel maintaining cpuid in tp
+/// register.
+pub(crate) fn cpu_id() -> u8 {
+    let mut cpu_id;
+    unsafe {
+        asm!("mv {0}, tp", out(reg) cpu_id);
+    }
+    cpu_id
+}
+
 pub fn mycpu() -> Arc<Cpu> {
-    return CPUS[0].clone();
+    return CPUS[cpu_id() as usize].clone();
 }
 
 // push_off/pop_off are like intr_off()/intr_on() except that they are matched:
@@ -25,7 +35,7 @@ pub(crate) fn push_off() {
     let old = intr_get();
     disable_intr();
     let mut cpu = mycpu();
-    let cpu_ref = Arc::get_mut(&mut cpu).unwrap();
+    let cpu_ref = unsafe { Arc::get_mut_unchecked(&mut cpu) };
     if cpu_ref.noff == 0 {
         cpu_ref.interrupt_enable = old;
     }
@@ -59,12 +69,4 @@ pub fn disable_intr() {
 
 pub fn intr_get() -> bool {
     riscv::register::sstatus::read().sie()
-}
-
-pub(crate) fn cpuid() -> u8 {
-    let mut tp: usize;
-    unsafe {
-        asm!("mv {0}, tp", out(reg) tp);
-    };
-    tp as u8
 }
