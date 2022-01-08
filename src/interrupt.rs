@@ -52,7 +52,7 @@ pub(crate) fn cpu_id() -> u8 {
 }
 
 pub fn mycpu() -> RefMut<'static, Cpu> {
-    return CPUS[cpu_id() as usize].0.borrow_mut();
+    CPUS[cpu_id() as usize].0.borrow_mut()
 }
 
 // push_off/pop_off are like intr_off()/intr_on() except that they are matched:

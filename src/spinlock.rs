@@ -112,7 +112,7 @@ impl<T: ?Sized> SpinLock<T> {
     /// Interrupts must be off.
     #[inline(always)]
     pub fn holding(&self) -> bool {
-        return self.is_locked() && self.cpuid == cpu_id();
+        self.is_locked() && self.cpuid == cpu_id()
     }
 }
 

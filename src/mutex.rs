@@ -65,7 +65,7 @@ impl<T> Mutex<T> {
 
 impl<T: ?Sized> Mutex<T> {
     pub fn lock(&self) -> MutexLockFuture<'_, T> {
-        return MutexLockFuture { mutex: self };
+        MutexLockFuture { mutex: self }
     }
 
     /// Attempts to acquire this lock immedidately.
@@ -80,8 +80,8 @@ impl<T: ?Sized> Mutex<T> {
     pub fn unlock(&self) {
         self.state.store(false, Ordering::Release);
         let waker = self.wakers.lock().pop_front();
-        if waker.is_some() {
-            waker.unwrap().wake();
+        if let Some(waker) = waker {
+            waker.wake();
         }
     }
 
