@@ -1,7 +1,7 @@
 extern crate alloc;
 use alloc::sync::Arc;
 use alloc::vec;
-use kernel_sync::spinlock::SpinLock;
+use kernel_sync::mutex::Mutex;
 
 #[test]
 fn basic_test() {

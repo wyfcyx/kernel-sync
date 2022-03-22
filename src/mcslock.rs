@@ -17,7 +17,7 @@ pub enum LockChannel {
 pub struct MCSLock<T: ?Sized> {
     // phantom: PhantomData<R>,
     pub(crate) locked: [AtomicBool; 2],
-    cpuid: u8,
+    // cpuid: u8,
     data: UnsafeCell<T>,
 }
 
@@ -40,7 +40,7 @@ impl<T> MCSLock<T> {
         MCSLock {
             locked: [AtomicBool::new(false), AtomicBool::new(false)], // TODO: remove hardcode
             data: UnsafeCell::new(data),
-            cpuid: 0,
+            // cpuid: 0,
         }
     }
 
@@ -115,13 +115,6 @@ impl<T: ?Sized> MCSLock<T> {
     pub fn is_locked(&self, channel: LockChannel) -> bool {
         self.locked[channel as usize].load(Ordering::Relaxed)
     }
-
-    /// Check whether this cpu is holding the lock.
-    /// Interrupts must be off.
-    #[inline(always)]
-    pub fn holding(&self, channel: LockChannel) -> bool {
-        self.is_locked(channel) && self.cpuid == cpu_id()
-    }
 }
 
 impl<'a, T: ?Sized + fmt::Display> fmt::Display for MCSLockGuard<'a, T> {
@@ -157,10 +150,9 @@ impl<T: ?Sized> fmt::Display for MCSLock<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "MCSLock{{locked=[N = {}, I = {}], cpuid={}}}",
+            "MCSLock{{locked=[N = {}, I = {}]}}",
             self.locked[LockChannel::Normal as usize].load(Ordering::Relaxed),
             self.locked[LockChannel::Interrupt as usize].load(Ordering::Relaxed),
-            self.cpuid,
         )
     }
 }
