@@ -8,7 +8,7 @@ cfg_if::cfg_if! {
             pub(crate) fn cpu_id() -> u8 {
                 let mut cpu_id;
                 unsafe {
-                    asm!("mv {0}, tp", out(reg) cpu_id);
+                    core::arch::asm!("mv {0}, tp", out(reg) cpu_id);
                 }
                 cpu_id
             }
@@ -19,7 +19,7 @@ cfg_if::cfg_if! {
                 unsafe { sstatus::clear_sie() };
             }
             pub(crate) fn intr_get() -> bool {
-                sstatus::sie()
+                sstatus::read().sie()
             }
         }
     } else if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
