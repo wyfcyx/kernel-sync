@@ -2,8 +2,10 @@ use core::{
     cell::UnsafeCell,
     default::Default,
     fmt,
+    mem,
+    hint::spin_loop,
     ops::{Deref, DerefMut},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 pub struct Mutex<T: ?Sized> {

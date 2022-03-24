@@ -115,7 +115,10 @@ pub(crate) fn pop_off() {
         panic!("pop_off");
     }
     cpu.noff -= 1;
-    if cpu.noff == 0 && cpu.interrupt_enable {
+    let should_enable = cpu.noff == 0 && cpu.interrupt_enable;
+    drop(cpu);
+    // NOTICE: intr_on() may lead to an immediate inerrupt, so we *MUST* drop(cpu) in advance.
+    if should_enable {
         intr_on();
     }
 }
