@@ -55,7 +55,7 @@ cfg_if::cfg_if! {
     }
 }
 
-pub use interrupts::*;
+use interrupts::*;
 
 #[derive(Debug, Default, Clone, Copy)]
 #[repr(C)]
@@ -84,6 +84,8 @@ impl<T> SafeRefCell<T> {
     }
 }
 
+// Avoid hard code
+#[allow(clippy::declare_interior_mutable_const)]
 const DEFAULT_CPU: SafeRefCell<Cpu> = SafeRefCell::new(Cpu::new());
 
 const MAX_CORE_NUM: usize = 4;
@@ -93,7 +95,7 @@ lazy_static! {
 }
 
 pub fn mycpu() -> RefMut<'static, Cpu> {
-    return CPUS[cpu_id() as usize].0.borrow_mut();
+    CPUS[cpu_id() as usize].0.borrow_mut()
 }
 
 // push_off/pop_off are like intr_off()/intr_on() except that they are matched:

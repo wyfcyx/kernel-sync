@@ -2,8 +2,8 @@ use core::{
     cell::UnsafeCell,
     default::Default,
     fmt,
-    mem,
     hint::spin_loop,
+    mem,
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
