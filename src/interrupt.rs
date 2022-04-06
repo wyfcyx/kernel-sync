@@ -2,9 +2,20 @@ use core::cell::{RefCell, RefMut};
 use lazy_static::*;
 
 cfg_if::cfg_if! {
-    if #[cfg(any(target_arch = "riscv32", target_arch = "riscv64"))] {
+    if #[cfg(target_os = "none")] {
         mod interrupts {
-            use riscv::{asm, register::sstatus};
+            pub(crate) fn cpu_id() -> u8 {
+                0
+            }
+            pub(crate) fn intr_on() {}
+            pub(crate) fn intr_off() {}
+            pub(crate) fn intr_get() -> bool {
+                false
+            }
+        }
+    } else if #[cfg(any(target_arch = "riscv32", target_arch = "riscv64"))] {
+        mod interrupts {
+            use riscv::register::sstatus;
             pub(crate) fn cpu_id() -> u8 {
                 let mut cpu_id;
                 unsafe {

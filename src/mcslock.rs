@@ -5,8 +5,6 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use crate::interrupt::cpu_id;
-
 #[repr(usize)]
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum LockChannel {
@@ -17,7 +15,6 @@ pub enum LockChannel {
 pub struct MCSLock<T: ?Sized> {
     // phantom: PhantomData<R>,
     pub(crate) locked: [AtomicBool; 2],
-    // cpuid: u8,
     data: UnsafeCell<T>,
 }
 
@@ -61,11 +58,6 @@ impl<T> MCSLock<T> {
 impl<T: ?Sized> MCSLock<T> {
     #[inline(always)]
     pub fn lock(&self, channel: LockChannel) -> MCSLockGuard<T> {
-        // push_off();
-        // if self.holding() {
-        //     panic!("a MCSLock can only be locked once by a CPU");
-        // }
-
         while self.locked[channel as usize]
             .compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_err()
@@ -85,10 +77,6 @@ impl<T: ?Sized> MCSLock<T> {
 
     #[inline(always)]
     pub fn try_lock(&self, channel: LockChannel) -> Option<MCSLockGuard<T>> {
-        // push_off();
-        // if self.holding() {
-        //     panic!("a MCSLock can only be locked once by a CPU");
-        // }
         if self.locked[channel as usize]
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok()
@@ -99,7 +87,6 @@ impl<T: ?Sized> MCSLock<T> {
                 channel,
             })
         } else {
-            // pop_off();
             None
         }
     }
@@ -139,9 +126,6 @@ impl<'a, T: ?Sized> DerefMut for MCSLockGuard<'a, T> {
 impl<'a, T: ?Sized> Drop for MCSLockGuard<'a, T> {
     /// The dropping of the MutexGuard will release the lock it was created from.
     fn drop(&mut self) {
-        if !self.mcslock.holding(self.channel) {
-            panic!("current cpu doesn't hold the lock{}", self.mcslock);
-        }
         self.mcslock.locked[self.channel as usize].store(false, Ordering::Release);
     }
 }
