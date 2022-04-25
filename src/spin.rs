@@ -8,8 +8,8 @@ use core::{
 
 use crate::interrupt::{pop_off, push_off};
 
-pub struct Mutex<T: ?Sized> {
-    pub(crate) locked: AtomicBool,
+pub struct SpinMutex<T: ?Sized> {
+    locked: AtomicBool,
     data: UnsafeCell<T>,
 }
 
@@ -17,18 +17,18 @@ pub struct Mutex<T: ?Sized> {
 /// When this structure is dropped (falls out of scope),
 /// the lock will be unlocked.
 ///
-pub struct MutexGuard<'a, T: ?Sized + 'a> {
-    spinlock: &'a Mutex<T>,
+pub struct SpinMutexGuard<'a, T: ?Sized + 'a> {
+    lock: &'a AtomicBool,
     data: &'a mut T,
 }
 
-unsafe impl<T: ?Sized + Send> Sync for Mutex<T> {}
-unsafe impl<T: ?Sized + Send> Send for Mutex<T> {}
+unsafe impl<T: ?Sized + Send> Sync for SpinMutex<T> {}
+unsafe impl<T: ?Sized + Send> Send for SpinMutex<T> {}
 
-impl<T> Mutex<T> {
+impl<T> SpinMutex<T> {
     #[inline(always)]
     pub const fn new(data: T) -> Self {
-        Mutex {
+        SpinMutex {
             locked: AtomicBool::new(false),
             data: UnsafeCell::new(data),
         }
@@ -38,8 +38,7 @@ impl<T> Mutex<T> {
     pub fn into_inner(self) -> T {
         // We know statically that there are no outstanding references to
         // `self` so there's no need to lock.
-        let Mutex { data, .. } = self;
-        data.into_inner()
+        self.data.into_inner()
     }
 
     #[inline(always)]
@@ -48,9 +47,9 @@ impl<T> Mutex<T> {
     }
 }
 
-impl<T: ?Sized> Mutex<T> {
+impl<T: ?Sized> SpinMutex<T> {
     #[inline(always)]
-    pub fn lock(&self) -> MutexGuard<T> {
+    pub fn lock(&self) -> SpinMutexGuard<T> {
         push_off();
         while self
             .locked
@@ -62,22 +61,22 @@ impl<T: ?Sized> Mutex<T> {
                 core::hint::spin_loop();
             }
         }
-        MutexGuard {
-            spinlock: self,
+        SpinMutexGuard {
+            lock: &self.locked,
             data: unsafe { &mut *self.data.get() },
         }
     }
 
     #[inline(always)]
-    pub fn try_lock(&self) -> Option<MutexGuard<T>> {
+    pub fn try_lock(&self) -> Option<SpinMutexGuard<T>> {
         push_off();
         if self
             .locked
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok()
         {
-            Some(MutexGuard {
-                spinlock: self,
+            Some(SpinMutexGuard {
+                lock: &self.locked,
                 data: unsafe { &mut *self.data.get() },
             })
         } else {
@@ -99,52 +98,58 @@ impl<T: ?Sized> Mutex<T> {
     }
 }
 
-impl<'a, T: ?Sized + fmt::Display> fmt::Display for MutexGuard<'a, T> {
+impl<T: ?Sized + fmt::Debug> fmt::Debug for SpinMutex<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Display::fmt(&**self, f)
+        match self.try_lock() {
+            Some(guard) => write!(f, "Mutex {{ data: ")
+                .and_then(|()| (&*guard).fmt(f))
+                .and_then(|()| write!(f, "}}")),
+            None => write!(f, "Mutex {{ <locked> }}"),
+        }
     }
 }
 
-impl<'a, T: ?Sized> Deref for MutexGuard<'a, T> {
+impl<T: ?Sized + Default> Default for SpinMutex<T> {
+    fn default() -> Self {
+        SpinMutex::new(T::default())
+    }
+}
+
+impl<T> From<T> for SpinMutex<T> {
+    fn from(data: T) -> Self {
+        Self::new(data)
+    }
+}
+
+impl<'a, T: ?Sized> Drop for SpinMutexGuard<'a, T> {
+    /// The dropping of the SpinMutexGuard will release the lock it was created from.
+    fn drop(&mut self) {
+        self.lock.store(false, Ordering::Release);
+        pop_off();
+    }
+}
+
+impl<'a, T: ?Sized> Deref for SpinMutexGuard<'a, T> {
     type Target = T;
     fn deref(&self) -> &T {
         self.data
     }
 }
 
-impl<'a, T: ?Sized> DerefMut for MutexGuard<'a, T> {
+impl<'a, T: ?Sized> DerefMut for SpinMutexGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut T {
         self.data
     }
 }
 
-impl<'a, T: ?Sized> Drop for MutexGuard<'a, T> {
-    /// The dropping of the MutexGuard will release the lock it was created from.
-    fn drop(&mut self) {
-        if !self.spinlock.is_locked() {
-            panic!("current cpu doesn't hold the lock{}", self.spinlock);
-        }
-        self.spinlock.locked.store(false, Ordering::Release);
-        pop_off();
+impl<'a, T: ?Sized + fmt::Debug> fmt::Debug for SpinMutexGuard<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&**self, f)
     }
 }
 
-// Not make sence, just to use #[drive(Debug)]
-impl<T: ?Sized> fmt::Display for Mutex<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Mutex{{locked={}}}", self.locked.load(Ordering::Relaxed),)
-    }
-}
-
-// Not make sence, just to use #[drive(Debug)]
-impl<T: ?Sized> fmt::Debug for Mutex<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Mutex{{locked={}}}", self.locked.load(Ordering::Relaxed))
-    }
-}
-
-impl<T: ?Sized + Default> Default for Mutex<T> {
-    fn default() -> Self {
-        Mutex::new(T::default())
+impl<'a, T: ?Sized + fmt::Display> fmt::Display for SpinMutexGuard<'a, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&**self, f)
     }
 }
