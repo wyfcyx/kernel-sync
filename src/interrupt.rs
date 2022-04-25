@@ -1,19 +1,7 @@
 use core::cell::{RefCell, RefMut};
-use lazy_static::*;
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "none")] {
-        mod interrupts {
-            pub(crate) fn cpu_id() -> u8 {
-                0
-            }
-            pub(crate) fn intr_on() {}
-            pub(crate) fn intr_off() {}
-            pub(crate) fn intr_get() -> bool {
-                false
-            }
-        }
-    } else if #[cfg(any(target_arch = "riscv32", target_arch = "riscv64"))] {
+    if #[cfg(all(target_os = "none", any(target_arch = "riscv32", target_arch = "riscv64")))] {
         mod interrupts {
             use riscv::register::sstatus;
             pub(crate) fn cpu_id() -> u8 {
@@ -33,7 +21,7 @@ cfg_if::cfg_if! {
                 sstatus::read().sie()
             }
         }
-    } else if #[cfg(any(target_arch = "x86", target_arch = "x86_64"))] {
+    } else if #[cfg(all(target_os = "none", any(target_arch = "x86", target_arch = "x86_64")))] {
         mod interrupts {
             use x86_64::instructions::interrupts;
             pub(crate) fn cpu_id() -> u8 {
@@ -55,12 +43,12 @@ cfg_if::cfg_if! {
     } else {
         mod interrupts {
             pub(crate) fn cpu_id() -> u8 {
-                0
+                unimplemented!();
             }
-            pub(crate) fn intr_on() {}
-            pub(crate) fn intr_off() {}
+            pub(crate) fn intr_on() { unimplemented!(); }
+            pub(crate) fn intr_off() { unimplemented!(); }
             pub(crate) fn intr_get() -> bool {
-                false
+                unimplemented!();
             }
         }
     }
@@ -69,7 +57,7 @@ cfg_if::cfg_if! {
 use interrupts::*;
 
 #[derive(Debug, Default, Clone, Copy)]
-#[repr(C)]
+#[repr(align(64))]
 pub struct Cpu {
     pub noff: i32,              // Depth of push_off() nesting.
     pub interrupt_enable: bool, // Were interrupts enabled before push_off()?
@@ -101,9 +89,7 @@ const DEFAULT_CPU: SafeRefCell<Cpu> = SafeRefCell::new(Cpu::new());
 
 const MAX_CORE_NUM: usize = 4;
 
-lazy_static! {
-    pub static ref CPUS: [SafeRefCell<Cpu>; MAX_CORE_NUM] = [DEFAULT_CPU; MAX_CORE_NUM];
-}
+static CPUS: [SafeRefCell<Cpu>; MAX_CORE_NUM] = [DEFAULT_CPU; MAX_CORE_NUM];
 
 pub fn mycpu() -> RefMut<'static, Cpu> {
     CPUS[cpu_id() as usize].0.borrow_mut()

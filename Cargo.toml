@@ -10,7 +10,6 @@ default = ["ticket"]
 ticket = ["spin/use_ticket_mutex"]
 
 [dependencies]
-lazy_static = { version = "1.4", features = ["spin_no_std"] }
 cfg-if = "1.0.0"
 
 # Bare-metal mode on x86_64
