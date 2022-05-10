@@ -58,7 +58,7 @@ cfg_if::cfg_if! {
             pub(crate) fn intr_get() -> bool {
                 use cortex_a::registers::SPSR_EL1;
                 use tock_registers::interfaces::Readable;
-                SPSR_EL1.is_set(SPSR_EL1::I)
+                !SPSR_EL1.is_set(SPSR_EL1::I)
             }
         }
     } else {
