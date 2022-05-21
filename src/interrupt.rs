@@ -40,6 +40,27 @@ cfg_if::cfg_if! {
                 interrupts::are_enabled()
             }
         }
+    } else if #[cfg(all(target_os = "none", target_arch = "aarch64"))] {
+        mod interrupts {
+            pub(crate) fn cpu_id() -> u8 {
+                0
+            }
+            pub(crate) fn intr_on() {
+                unsafe {
+                    core::arch::asm!("msr daifclr, #2");
+                }
+            }
+            pub(crate) fn intr_off() {
+                unsafe {
+                    core::arch::asm!("msr daifset, #2");
+                }
+            }
+            pub(crate) fn intr_get() -> bool {
+                use cortex_a::registers::DAIF;
+                use tock_registers::interfaces::Readable;
+                !DAIF.is_set(DAIF::I)
+            }
+        }
     } else {
         mod interrupts {
             pub(crate) fn cpu_id() -> u8 {
