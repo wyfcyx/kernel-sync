@@ -44,6 +44,7 @@ cfg_if::cfg_if! {
         mod interrupts {
             pub(crate) fn cpu_id() -> u8 {
                 use cortex_a::registers::MPIDR_EL1;
+                use tock_registers::interfaces::Readable;
                 (MPIDR_EL1.get() & 0xf) as u8
             }
             pub(crate) fn intr_on() {
