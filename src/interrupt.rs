@@ -43,7 +43,9 @@ cfg_if::cfg_if! {
     } else if #[cfg(all(target_os = "none", target_arch = "aarch64"))] {
         mod interrupts {
             pub(crate) fn cpu_id() -> u8 {
-                0
+                use cortex_a::registers::MPIDR_EL1;
+                use tock_registers::interfaces::Readable;
+                (MPIDR_EL1.get() & 0xf) as u8
             }
             pub(crate) fn intr_on() {
                 unsafe {
