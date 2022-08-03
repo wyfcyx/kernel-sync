@@ -42,7 +42,7 @@ cfg_if::cfg_if! {
                 */
                 let cpu_id: u64;
                 unsafe {
-                    asm!("mov {}, gs:28", out(reg) cpu_id);
+                    core::arch::asm!("mov {}, gs:28", out(reg) cpu_id);
                 }
                 cpu_id as u8
             }
