@@ -25,10 +25,19 @@ cfg_if::cfg_if! {
         mod interrupts {
             use x86_64::instructions::interrupts;
             pub(crate) fn cpu_id() -> u8 {
+                /// Hack: assuming that gsbase points to kernel tss and
+                /// x86_64::TaskStateSegment stores current cpu id in its
+                /// reserved_2 field.
+                use x86_64::registers::model_specific::GsBase;
+                let cpu_id_ptr = (GsBase::read() + 28) as usize as *const u64;
+                let cpu_id = unsafe { cpu_id_ptr.read() } as u8;
+                cpu_id
+                /*
                 raw_cpuid::CpuId::new()
                     .get_feature_info()
                     .unwrap()
                     .initial_local_apic_id() as u8
+                */
             }
             pub(crate) fn intr_on() {
                 interrupts::enable();
