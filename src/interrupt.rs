@@ -28,23 +28,17 @@ cfg_if::cfg_if! {
                 /// Hack: assuming that gsbase points to kernel tss and
                 /// x86_64::TaskStateSegment stores current cpu id in its
                 /// reserved_2 field.
-                /*
-                use x86_64::registers::model_specific::GsBase;
-                let cpu_id_ptr = (GsBase::read().as_u64() + 28) as usize as *const u64;
-                let cpu_id = unsafe { cpu_id_ptr.read() } as u8;
-                cpu_id
-                */
+                let cpu_id: u64;
+                unsafe {
+                    core::arch::asm!("mov {}, gs:28", out(reg) cpu_id);
+                }
+                cpu_id as u8
                 /*
                 raw_cpuid::CpuId::new()
                     .get_feature_info()
                     .unwrap()
                     .initial_local_apic_id() as u8
                 */
-                let cpu_id: u64;
-                unsafe {
-                    core::arch::asm!("mov {}, gs:28", out(reg) cpu_id);
-                }
-                cpu_id as u8
             }
             pub(crate) fn intr_on() {
                 interrupts::enable();
