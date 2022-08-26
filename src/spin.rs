@@ -51,6 +51,7 @@ impl<T: ?Sized> SpinMutex<T> {
     #[inline(always)]
     pub fn lock(&self) -> SpinMutexGuard<T> {
         push_off();
+        let mut times = 0;
         while self
             .locked
             .compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed)
@@ -59,6 +60,10 @@ impl<T: ?Sized> SpinMutex<T> {
             // Wait until the lock looks unlocked before retrying
             while self.is_locked() {
                 core::hint::spin_loop();
+            }
+            times += 1;
+            if times > 10000000 {
+                panic!("dead lock!");
             }
         }
         SpinMutexGuard {
